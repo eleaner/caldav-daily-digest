@@ -1,4 +1,8 @@
 # caldav-daily-digest
+The original repo has/had issues working with radicale
+I also wanted for it to directly send an email, so I forked it here
+
+---
 a little python script to put together a daily digest of events, e.g. to 
 be run from cron to email to a user
 
