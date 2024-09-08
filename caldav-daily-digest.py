@@ -27,6 +27,7 @@ import email.utils
 CAL_PROTOCOL = 'https'
 LOCAL_TZ = pytz.timezone("UTC")
 SMTP_SUBJECT = "Calendar - "
+SMTP_PORT = 465
 
 # read environment values
 if "CAL_PROTOCOL" in environ:
