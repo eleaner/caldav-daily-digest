@@ -2,6 +2,23 @@
 The original repo has/had issues working with radicale
 I also wanted for it to directly send an email, so I forked it here
 
+it passes execution parameters via environmental variables
+| variable | example | default | comment |
+|----------|---------|---------|---------|
+| SENDER_EMAIL | "sender@email.com" | n/a | sender of the digest email|
+| RECEIVER_EMAIL | "receiver@email.com" | n/a | recipient of the digest email
+| SMTP_PASSWORD | "password" | n/a | password of the sending email
+| SMTP_SERVER | "smtp.email.com" | n/a | address of smtp server
+| SMTP_PORT | 465 | 465 | script communicates via ssl|
+| SMTP_FROM | "Calendar | n/a | overwrites the name of teh sender
+| SMTP_SUBJECT | "Radicale: " | "Calendar - " | prefix of email subject, to help filtering
+| TZ | "Europe/Berlin" | "UTC" |
+| CAL_USERNAME | user | n/a | CALDAV user
+| CAL_PASSWORD | password | n/a | CALDAV password
+| CAL_BASE_URL | "server.com/radicale/" | n/a | CALDAV address without protocol, trailing '/' is important
+| CAL_PROTOCOL | "http" | "https" | CALDAV connection protocol
+
+
 ---
 a little python script to put together a daily digest of events, e.g. to 
 be run from cron to email to a user
