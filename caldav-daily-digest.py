@@ -7,72 +7,135 @@ events scheduled for that day. naive and hacky but seems to mostly
 work? easiest way to run this is from cron.
 
 author: michael.o.jackson@gmail.com
+modified and extended by: github@kisiel.net.pl
 
 license: apache 2.0"""
-
-from datetime import datetime, timedelta
 from os import environ
 from urllib.parse import quote_plus
 from icalendar import Calendar
 import caldav
 import pytz
 import sys
+import datetime
+import ssl
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import email.utils
 
-# you'll probably want to change these:
-USERNAME = 'foobar@bazquux.com'
-PASSWORD = 'ChAng3M3!'
-BASE_URL = 'stbeehive.blahblahblah.foo/caldav/st/principals/individuals/'
+# defaults
+CAL_PROTOCOL = 'https'
+LOCAL_TZ = pytz.timezone("UTC")
+SMTP_SUBJECT = "Calendar - "
 
-# below here you probably will not need to make changes
-sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf8', buffering=1)
-URL = 'https://' + quote_plus(USERNAME) + ":" + quote_plus(PASSWORD) \
-        + '@' + BASE_URL + quote_plus(USERNAME) + '/'
-NOW = datetime.now()
-DAY_START = datetime(NOW.year, NOW.month, NOW.day)
-DAY_END = DAY_START + timedelta(hours=24)
-
+# read environment values
+if "CAL_PROTOCOL" in environ:
+  CAL_PROTOCOL = environ["CAL_PROTOCOL"]
+if "CAL_USERNAME" in environ:
+  CAL_USERNAME = environ["CAL_USERNAME"]
+if "CAL_PASSWORD" in environ:
+  CAL_PASSWORD = environ["CAL_PASSWORD"]
+if "CAL_BASE_URL" in environ:
+  CAL_BASE_URL = environ["CAL_BASE_URL"]
+if "SMTP_SERVER" in environ:
+  SMTP_SERVER = environ["SMTP_SERVER"]
+if "SMTP_PORT" in environ:
+  SMTP_PORT = environ["SMTP_PORT"]
+if "SENDER_EMAIL" in environ:
+  SENDER_EMAIL = environ["SENDER_EMAIL"]
+if "SMTP_FROM" in environ:
+  SMTP_FROM = environ["SMTP_FROM"]
+if "RECEIVER_EMAIL" in environ:
+  RECEIVER_EMAIL = environ["RECEIVER_EMAIL"]
+if "SMTP_PASSWORD" in environ:
+  SMTP_PASSWORD = environ["SMTP_PASSWORD"]
+if "SMTP_SUBJECT" in environ:
+  SMTP_SUBJECT = environ["SMTP_SUBJECT"]
 if "TZ" in environ:
-    LOCAL_TZ = pytz.timezone(environ["TZ"])
-else:
-    LOCAL_TZ = pytz.timezone("UTC")
+  LOCAL_TZ = pytz.timezone(environ["TZ"])
+
+sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf8', buffering=1)
+URL = quote_plus(CAL_PROTOCOL) + '://' + quote_plus(CAL_USERNAME) + ":" + quote_plus(CAL_PASSWORD) \
+        + '@' + CAL_BASE_URL + quote_plus(CAL_USERNAME) + '/'
+
+NOW = datetime.datetime.now()
+DAY_START = datetime.datetime(NOW.year, NOW.month, NOW.day)
+DAY_END = DAY_START + datetime.timedelta(hours=24)
 
 def pretty_print_time(date_time):
     """takes a datetime and normalizes it to local time, prints nicely"""
     local_dt = date_time.replace(tzinfo=pytz.utc).astimezone(LOCAL_TZ)
     return local_dt.strftime("%I:%M %p")
 
-print("pulling events for %d-%d-%d" % (NOW.year, NOW.month, NOW.day))
+def send_email(smtp_server, smtp_port, smtp_from, sender_email, receiver_email, subject, body, password):
+
+    # Create a text message
+    msg = MIMEMultipart()
+    msg['From'] = email.utils.formataddr((smtp_from, sender_email))
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+
+    # Attach the message body
+    msg.attach(MIMEText(body, 'plain'))
+
+    # Create a secure SSL context
+    context = ssl.create_default_context()
+
+    # Set up the SMTP server with SSL
+    server = smtplib.SMTP_SSL(smtp_server, smtp_port, context=context)
+
+    # Log in to the SMTP server
+    server.login(sender_email, password)
+
+    # Send the email
+    text = msg.as_string()
+    server.sendmail(sender_email, receiver_email, text)
+    server.quit()
+
 
 CLIENT = caldav.DAVClient(URL)
 PRINCIPAL = CLIENT.principal()
 CALENDARS = PRINCIPAL.calendars()
 
+# top line in email body
+body = f"Agenda for {NOW.day} {NOW.strftime('%B')} {NOW.year}, {NOW.strftime('%I:%M %p')}\n\n"
+
 if not CALENDARS:
-    print("No calendars defined for " + USERNAME)
+# handle lack of calendars
+    subject = "No calendars defined for " + CAL_USERNAME
 else:
-    CALENDAR = CALENDARS[0]
+  for CALENDAR in CALENDARS:
     EVENTS = CALENDAR.date_search(DAY_START, DAY_END)
 
-    if not EVENTS:
-        print("Nothing on your calendar for today!")
-    else:
+    if EVENTS:
         FILTERED_EVENTS = []
         for ev in EVENTS:
             components = Calendar.from_ical(ev.data).walk('vevent')
             if not components:
                 continue
             FILTERED_EVENTS.append(components[0])
+        if FILTERED_EVENTS:
+        subject = "Daily Agenda for " + CAL_USERNAME
+# list events from all calendars
+          FILTERED_EVENTS.sort(key=lambda e: e.decoded('dtstart'))
+          for event in FILTERED_EVENTS:
+              summary = event.decoded('summary').decode('utf-8')
+              start = event.decoded('dtstart')
+              end = event.decoded('dtend')
 
-        FILTERED_EVENTS.sort(key=lambda e: e.decoded('dtstart'))
-        for event in FILTERED_EVENTS:
-            summary = event.decoded('summary').decode('utf-8')
-            description = ""
-            if event.decoded('description') != b'':
-                description = event.decoded('description').decode('utf-8')
-            start = event.decoded('dtstart')
-            end = event.decoded('dtend')
+              if type(start) == datetime.date and type(end) == datetime.date:
+# handle All-day events separately
+                  body += f"All-day event: {summary}\n"
+              else:
+                  body += f"{pretty_print_time(start)} - {pretty_print_time(end)}: {summary}\n"
+        else:
+# handle empty agenda
+          subject = CAL_USERNAME + " have no events scheduled today"
 
-            print(u"%s - %s %s\n%s\n\n" % (pretty_print_time(start),
-                                           pretty_print_time(end),
-                                           summary,
-                                           description))
+# add prefix to the subject for easier filtering
+subject = SMTP_SUBJECT + ": " + subject
+# print for log
+print(subject)
+print(body)
+# send email
+send_email(SMTP_SERVER, SMTP_PORT, SMTP_FROM, SENDER_EMAIL, RECEIVER_EMAIL, subject, body, SMTP_PASSWORD)
