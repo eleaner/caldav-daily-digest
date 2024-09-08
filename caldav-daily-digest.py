@@ -116,7 +116,7 @@ else:
                 continue
             FILTERED_EVENTS.append(components[0])
         if FILTERED_EVENTS:
-        subject = "Daily Agenda for " + CAL_USERNAME
+          subject = "Daily Agenda for " + CAL_USERNAME
 # list events from all calendars
           FILTERED_EVENTS.sort(key=lambda e: e.decoded('dtstart'))
           for event in FILTERED_EVENTS:
