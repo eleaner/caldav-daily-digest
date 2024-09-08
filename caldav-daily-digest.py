@@ -134,7 +134,7 @@ else:
           subject = CAL_USERNAME + " have no events scheduled today"
 
 # add prefix to the subject for easier filtering
-subject = SMTP_SUBJECT + ": " + subject
+subject = SMTP_SUBJECT + subject
 # print for log
 print(subject)
 print(body)
