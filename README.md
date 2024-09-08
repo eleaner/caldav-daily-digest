@@ -10,7 +10,7 @@ it passes execution parameters via environmental variables
 | SMTP_PASSWORD | "password" | n/a | password of the sending email
 | SMTP_SERVER | "smtp.email.com" | n/a | address of smtp server
 | SMTP_PORT | 465 | 465 | script communicates via ssl|
-| SMTP_FROM | "Calendar | n/a | overwrites the name of teh sender
+| SMTP_FROM | "Calendar | n/a | overwrites the name of the sender
 | SMTP_SUBJECT | "Radicale: " | "Calendar - " | prefix of email subject, to help filtering
 | TZ | "Europe/Berlin" | "UTC" |
 | CAL_USERNAME | user | n/a | CALDAV user
