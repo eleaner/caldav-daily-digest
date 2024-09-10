@@ -22,13 +22,14 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import email.utils
+#import icalendar
 
 # defaults
 CAL_PROTOCOL = 'https'
 LOCAL_TZ = pytz.timezone("UTC")
 SMTP_SUBJECT = "Calendar - "
 SMTP_PORT = 465
-
+weird = ""
 # read environment values
 if "CAL_PROTOCOL" in environ:
   CAL_PROTOCOL = environ["CAL_PROTOCOL"]
@@ -66,7 +67,8 @@ DAY_END = DAY_START + datetime.timedelta(hours=24)
 def pretty_print_time(date_time):
     """takes a datetime and normalizes it to local time, prints nicely"""
     local_dt = date_time.replace(tzinfo=pytz.utc).astimezone(LOCAL_TZ)
-    return local_dt.strftime("%I:%M %p")
+#    return local_dt.strftime("%I:%M %p")
+    return local_dt.strftime("%H:%M")
 
 def send_email(smtp_server, smtp_port, smtp_from, sender_email, receiver_email, subject, body, password):
 
@@ -93,13 +95,18 @@ def send_email(smtp_server, smtp_port, smtp_from, sender_email, receiver_email, 
     server.sendmail(sender_email, receiver_email, text)
     server.quit()
 
+def convert_to_datetime(dt):
+    if isinstance(dt, datetime.date):
+        return datetime.datetime.combine(dt, datetime.time())
+    else:
+        return dt
 
 CLIENT = caldav.DAVClient(URL)
 PRINCIPAL = CLIENT.principal()
 CALENDARS = PRINCIPAL.calendars()
 
 # top line in email body
-body = f"Agenda for {NOW.day} {NOW.strftime('%B')} {NOW.year}, {NOW.strftime('%I:%M %p')}\n\n"
+body = f"Agenda for {NOW.day} {NOW.strftime('%B')} {NOW.year}, {NOW.strftime('%H:%M')}\n\n"
 
 if not CALENDARS:
 # handle lack of calendars
@@ -118,7 +125,7 @@ else:
         if FILTERED_EVENTS:
           subject = "Daily Agenda for " + CAL_USERNAME
 # list events from all calendars
-          FILTERED_EVENTS.sort(key=lambda e: e.decoded('dtstart'))
+          FILTERED_EVENTS.sort(key=lambda e: convert_to_datetime(e.decoded('dtstart').strftime('%H:%M')))
           for event in FILTERED_EVENTS:
               summary = event.decoded('summary').decode('utf-8')
               start = event.decoded('dtstart')
@@ -126,7 +133,16 @@ else:
 
               if type(start) == datetime.date and type(end) == datetime.date:
 # handle All-day events separately
-                  body += f"All-day event: {summary}\n"
+                  if event.get('transp') == 'TRANSPARENT':
+                    if NOW.month == start.month and NOW.day == start.day:
+#I assume these ar the reccurent events that started years ago and happen say every year
+                      print("transparent event")
+                      body += f"All-day event: {summary}\n"
+                    else:
+#I don' expect them to be multiday, so I filter out the ones that did not start today
+                      weird += f"All-day event: {summary}\n"
+                  else:
+                    body += f"All-day event: {summary}\n"
               else:
                   body += f"{pretty_print_time(start)} - {pretty_print_time(end)}: {summary}\n"
         else:
@@ -135,6 +151,12 @@ else:
 
 # add prefix to the subject for easier filtering
 subject = SMTP_SUBJECT + subject
+
+# add weird events that likely should be removed - left for testing
+if weird:
+  body += "\nWeird events indented to filter out\n"
+  body += weird
+
 # print for log
 print(subject)
 print(body)
